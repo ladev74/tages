@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option go_package = "github.com/ladev74/tages/internal/api";
+
+package fileService.v1;
+
+service FileService {
+//  rpc UploadFile (UploadFileRequest) returns (UploadFileResponse);
+//  rpc ListFiles (ListFilesRequest) returns (ListFilesResponse);
+  rpc GetFile (GetFileRequest) returns (GetFileResponse);
+}
+
+message File {
+  string id = 1;
+  repeated bytes data = 2;
+}
+
+message GetFileRequest {
+  string file_id = 1;
+}
+
+message GetFileResponse {
+  File file = 1;
+}
