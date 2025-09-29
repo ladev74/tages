@@ -10,10 +10,10 @@ import (
 
 func TestNew(t *testing.T) {
 	tempDir := t.TempDir()
-	tempFile := tempDir + "/config.env"
+	tempFile := tempDir + "/local.yaml"
 
 	content := `
-		LOGGER=dev
+		env: local
 	`
 
 	err := os.WriteFile(tempFile, []byte(content), 0644)
@@ -22,7 +22,7 @@ func TestNew(t *testing.T) {
 	cfg, err := New(tempFile)
 	require.NoError(t, err)
 
-	assert.Equal(t, "dev", cfg.Logger.Env)
+	assert.Equal(t, "local", cfg.Env)
 
 	_, err = New("wrongPath")
 	assert.Contains(t, err.Error(), "failed to read config")

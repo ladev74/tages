@@ -1,18 +1,27 @@
 package config
 
 import (
+	"flag"
 	"fmt"
+	"os"
 
 	"github.com/ilyakaznacheev/cleanenv"
-
-	"fileservice/internal/logger"
 )
 
 type Config struct {
-	Logger logger.Config `env-required:"true"`
+	Env string `yaml:"env" env-required:"true"`
 }
 
-func New(path string) (*Config, error) {
+func New() (*Config, error) {
+	path := fetchPath()
+	if path == "" {
+		return nil, fmt.Errorf("path to the config is not specified")
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file: %s, does not exist", path)
+	}
+
 	var cfg Config
 
 	if err := cleanenv.ReadConfig(path, &cfg); err != nil {
@@ -20,4 +29,17 @@ func New(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func fetchPath() string {
+	var path string
+
+	flag.StringVar(&path, "config_path", "", "path to config file")
+	flag.Parse()
+
+	if path == "" {
+		os.Getenv("CONFIG_PATH")
+	}
+
+	return path
 }

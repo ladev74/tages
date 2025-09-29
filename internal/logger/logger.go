@@ -1,77 +1,68 @@
 package logger
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
+
+	"fileservice/internal/config"
 )
 
-type Config struct {
-	Env    string `env:"LOGGER" env-required:"true"`
-	output io.Writer
-}
+// TODO: add a logging level to the production logger
 
-func New(cfg *Config) (*zap.Logger, error) {
+func New(cfg *config.Config) (*zap.Logger, error) {
 	switch cfg.Env {
-	case "dev":
-		config := zap.NewDevelopmentConfig()
+	case "local":
+		loggerConfig := zap.NewDevelopmentConfig()
 
-		config.DisableCaller = true
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		config.EncoderConfig.LineEnding = "\n\n"
-		config.EncoderConfig.ConsoleSeparator = " | "
-		config.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+		loggerConfig.DisableCaller = true
+		loggerConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		loggerConfig.EncoderConfig.LineEnding = "\n\n"
+		loggerConfig.EncoderConfig.ConsoleSeparator = " | "
+		loggerConfig.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString("\033[36m" + t.Format("15:04:05") + "\033[0m")
 		}
+		loggerConfig.Level.SetLevel(zap.DebugLevel)
 
-		if cfg.output != nil {
-			config.OutputPaths = []string{"stdout"}
-			core := zapcore.NewCore(
-				zapcore.NewConsoleEncoder(config.EncoderConfig),
-				zapcore.AddSync(cfg.output),
-				config.Level,
-			)
-
-			logger := zap.New(core)
-
-			return logger, nil
-
-		} else {
-			logger, err := config.Build()
-			if err != nil {
-				return nil, err
-			}
-
-			return logger, nil
-
+		logger, err := loggerConfig.Build()
+		if err != nil {
+			return nil, err
 		}
+
+		return logger, nil
 
 	case "prod":
-		if cfg.output != nil {
-			config := zap.NewProductionConfig()
-			core := zapcore.NewCore(
-				zapcore.NewJSONEncoder(config.EncoderConfig),
-				zapcore.AddSync(cfg.output),
-				config.Level,
-			)
-
-			logger := zap.New(core)
-
-			return logger, nil
-
-		} else {
-			logger, err := zap.NewProduction()
-			if err != nil {
-				return nil, err
-			}
-
-			return logger, nil
+		logger, err := zap.NewProduction()
+		if err != nil {
+			return nil, err
 		}
+
+		return logger, nil
 
 	default:
 		return nil, fmt.Errorf("unknown environment: %s", cfg.Env)
+	}
+}
+
+func Interceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req any,
+		info *grpc.UnaryServerInfo,
+		next grpc.UnaryHandler,
+
+	) (resp any, err error) {
+
+		logger.Info(
+			"new request", zap.String("method", info.FullMethod),
+			zap.Any("request", req),
+			zap.Time("time", time.Now()),
+		)
+
+		return next(ctx, req)
 	}
 }
