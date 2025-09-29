@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 
+	"fileservice/internal/app"
 	cconfig "fileservice/internal/config"
 	llogger "fileservice/internal/logger"
 )
@@ -37,26 +35,19 @@ func main() {
 		log.Fatalf("cannot initialize config: %v", err)
 	}
 
+	fmt.Println(config)
+
 	logger, err := llogger.New(config)
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	//service := sservice.New(logger, &sservice.Config{Timeout: 3 * time.Second})
-
-	grpcLis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", 50051))
-	if err != nil {
-		logger.Fatal("failed to listen", zap.Error(err))
-	}
-
-	server := grpc.NewServer(grpc.UnaryInterceptor(llogger.Interceptor(logger)))
-	//api.RegisterFileServiceServer(server, service)
-	reflection.Register(server)
+	application := app.New(logger, config.GRPC.Port)
 
 	go func() {
-		logger.Info("GRPC server started", zap.Int("addr", 50051))
-		if err = server.Serve(grpcLis); err != nil {
-			logger.Fatal("failed to serve", zap.Error(err))
+		err = application.GRPCServer.Start()
+		if err != nil {
+			log.Fatalf("cannot start grpc server: %v", err)
 		}
 	}()
 
@@ -64,11 +55,14 @@ func main() {
 
 	logger.Info("received shutdown signal")
 
-	server.GracefulStop()
+	err = application.GRPCServer.Stop()
+	if err != nil {
+		log.Fatalf("cannot gracefully stop grpc server: %v", err)
+	}
 
 	//postgresClient.Close()
 
-	logger.Info("stopping http server", zap.Int("addr", 50051))
+	logger.Info("stopping http service", zap.Int("addr", 50051))
 
 	logger.Info("application shutdown completed successfully")
 }

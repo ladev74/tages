@@ -6,10 +6,13 @@ import (
 	"os"
 
 	"github.com/ilyakaznacheev/cleanenv"
+
+	grpcapp "fileservice/internal/app/grpc_app"
 )
 
 type Config struct {
-	Env string `yaml:"env" env-required:"true"`
+	Env  string         `yaml:"env" env-required:"true"`
+	GRPC grpcapp.Config `yaml:"grpc" env-required:"true"`
 }
 
 func New() (*Config, error) {

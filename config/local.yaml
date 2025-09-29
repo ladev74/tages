@@ -1,1 +1,4 @@
 env: local
+
+grpc:
+  port: 50051

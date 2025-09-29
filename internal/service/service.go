@@ -1,6 +1,6 @@
 package service
 
-// TODO: вынести в логику grpc сервера
+// TODO: вынести в логику grpc_app сервера
 
 //func (s *Service) ListFiles(ctx context.Context, req *api.ListFilesRequest) (*api.ListFilesResponse, error) {
 //	ctx, cancel := context.WithTimeout(ctx, s.timeout)
