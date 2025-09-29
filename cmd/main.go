@@ -8,16 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"fileservice/internal/api"
 	cconfig "fileservice/internal/config"
 	llogger "fileservice/internal/logger"
-	sservice "fileservice/internal/service"
 )
 
 // TODO: ask how pass path to the config file (when starting by flag?),
@@ -45,12 +42,7 @@ func main() {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	logger.Debug("debug")
-	logger.Info("info")
-	logger.Warn("warn")
-	logger.Error("error")
-
-	service := sservice.New(logger, &sservice.Config{Timeout: 3 * time.Second})
+	//service := sservice.New(logger, &sservice.Config{Timeout: 3 * time.Second})
 
 	grpcLis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", 50051))
 	if err != nil {
@@ -58,7 +50,7 @@ func main() {
 	}
 
 	server := grpc.NewServer(grpc.UnaryInterceptor(llogger.Interceptor(logger)))
-	api.RegisterFileServiceServer(server, service)
+	//api.RegisterFileServiceServer(server, service)
 	reflection.Register(server)
 
 	go func() {
