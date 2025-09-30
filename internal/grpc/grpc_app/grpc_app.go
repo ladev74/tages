@@ -3,31 +3,38 @@ package grpcapp
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"fileservice/internal/grpc/service"
+	"fileservice/internal/sorage/minio"
 )
 
 type Config struct {
-	Port int `yaml:"port" env-required:"true"`
+	Port             int           `yaml:"port" env-required:"true"`
+	OperationTimeout time.Duration `yaml:"operation_timeout" env-required:"true"`
+	ShutdownTimeout  time.Duration `yaml:"shutdown_timeout" env-required:"true"`
 }
 
 type App struct {
-	logger     *zap.Logger
-	gRPCServer *grpc.Server
-	port       int
+	gRPCServer       *grpc.Server
+	port             int
+	operationTimeout time.Duration
+	logger           *zap.Logger
 }
 
-func New(logger *zap.Logger, port int) *App {
+func New(minio minio.Client, logger *zap.Logger, config *Config) *App {
 	gRPCServer := grpc.NewServer()
-	service.Register(gRPCServer)
+
+	service.Register(gRPCServer, minio, config.OperationTimeout, logger)
 
 	return &App{
-		logger:     logger,
-		gRPCServer: gRPCServer,
-		port:       port,
+		gRPCServer:       gRPCServer,
+		port:             config.Port,
+		operationTimeout: config.OperationTimeout,
+		logger:           logger,
 	}
 }
 

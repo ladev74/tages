@@ -10,16 +10,21 @@ import (
 
 	"go.uber.org/zap"
 
-	"fileservice/internal/app"
 	cconfig "fileservice/internal/config"
+	"fileservice/internal/grpc/grpc_app"
 	llogger "fileservice/internal/logger"
+	minio2 "fileservice/internal/sorage/minio"
 )
 
-// TODO: ask how pass path to the config file (when starting by flag?),
+// TODO: ask about:
+// TODO: how to pass path to the config file (when starting by flag?),
+// TODO: is it necessary grpc_app or use only service
 // TODO: alias in import
+// TODO: logging level
 
 // TODO: use buffers
 // TODO: metrics
+// TODO: go doc comm
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -42,10 +47,15 @@ func main() {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	application := app.New(logger, config.GRPC.Port)
+	minio, err := minio2.New(ctx, config.Minio, logger)
+	if err != nil {
+		log.Fatalf("cannot initialize minio: %v", err)
+	}
+
+	application := grpcapp.New(minio, logger, &config.GRPC)
 
 	go func() {
-		err = application.GRPCServer.Start()
+		err = application.Start()
 		if err != nil {
 			log.Fatalf("cannot start grpc server: %v", err)
 		}
@@ -55,7 +65,7 @@ func main() {
 
 	logger.Info("received shutdown signal")
 
-	err = application.GRPCServer.Stop()
+	err = application.Stop()
 	if err != nil {
 		log.Fatalf("cannot gracefully stop grpc server: %v", err)
 	}

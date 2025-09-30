@@ -2,3 +2,14 @@ env: local
 
 grpc:
   port: 50051
+  operation_timeout: 3s
+  shutdown_timeout: 15s
+
+minio:
+  host: localhost
+  port: 9000
+  bucket_name: images
+  user: admin
+  password: admin_password
+  use_ssl: false
+  operation_timeout: 3s

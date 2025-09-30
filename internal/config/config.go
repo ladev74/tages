@@ -7,12 +7,14 @@ import (
 
 	"github.com/ilyakaznacheev/cleanenv"
 
-	grpcapp "fileservice/internal/app/grpc_app"
+	"fileservice/internal/grpc/grpc_app"
+	"fileservice/internal/sorage/minio"
 )
 
 type Config struct {
-	Env  string         `yaml:"env" env-required:"true"`
-	GRPC grpcapp.Config `yaml:"grpc" env-required:"true"`
+	Env   string         `yaml:"env" env-required:"true"`
+	GRPC  grpcapp.Config `yaml:"grpc" env-required:"true"`
+	Minio minio.Config   `yaml:"minio" env-required:"true"`
 }
 
 func New() (*Config, error) {
