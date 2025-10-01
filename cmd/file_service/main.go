@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,7 +14,8 @@ import (
 	cconfig "fileservice/internal/config"
 	"fileservice/internal/grpc/grpc_app"
 	llogger "fileservice/internal/logger"
-	minio2 "fileservice/internal/sorage/minio"
+	mminio "fileservice/internal/sorage/minio"
+	ppostgres "fileservice/internal/sorage/postgres"
 )
 
 // TODO: ask about:
@@ -35,29 +37,36 @@ func main() {
 	)
 	defer cancel()
 
-	config, err := cconfig.New()
+	configPath := fetchPath()
+
+	config, err := cconfig.New(configPath)
 	if err != nil {
 		log.Fatalf("cannot initialize config: %v", err)
 	}
 
 	fmt.Println(config)
 
-	logger, err := llogger.New(config)
+	logger, err := llogger.New(config.Env)
 	if err != nil {
 		log.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	minio, err := minio2.New(ctx, config.Minio, logger)
+	postgres, err := ppostgres.New(ctx, &config.Postgres, logger)
 	if err != nil {
-		log.Fatalf("cannot initialize minio: %v", err)
+		logger.Fatal("cannot initialize postgres", zap.Error(err))
 	}
 
-	application := grpcapp.New(minio, logger, &config.GRPC)
+	minio, err := mminio.New(ctx, config.Minio, logger)
+	if err != nil {
+		logger.Fatal("cannot initialize minio", zap.Error(err))
+	}
+
+	application := grpcapp.New(postgres, minio, logger, &config.GRPC)
 
 	go func() {
 		err = application.Start()
 		if err != nil {
-			log.Fatalf("cannot start grpc server: %v", err)
+			logger.Fatal("cannot start grpc server", zap.Error(err))
 		}
 	}()
 
@@ -67,12 +76,25 @@ func main() {
 
 	err = application.Stop()
 	if err != nil {
-		log.Fatalf("cannot gracefully stop grpc server: %v", err)
+		logger.Fatal("cannot gracefully stop grpc server", zap.Error(err))
 	}
 
-	//postgresClient.Close()
+	postgres.Close()
 
 	logger.Info("stopping http service", zap.Int("addr", 50051))
 
 	logger.Info("application shutdown completed successfully")
+}
+
+func fetchPath() string {
+	var path string
+
+	flag.StringVar(&path, "config_path", "", "path to config file")
+	flag.Parse()
+
+	if path == "" {
+		os.Getenv("CONFIG_PATH")
+	}
+
+	return path
 }

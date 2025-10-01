@@ -8,23 +8,24 @@ import (
 	"google.golang.org/grpc"
 
 	"fileservice/internal/sorage/minio"
+	"fileservice/internal/sorage/postgres"
 )
 
-type Service struct {
+type service struct {
 	fileservice.UnimplementedFileServiceServer
-	//postgres postgres.Client
-	minio  minio.Client
-	timout time.Duration
-	logger *zap.Logger
+	postgres postgres.Client
+	minio    minio.Client
+	timeout  time.Duration
+	logger   *zap.Logger
 }
 
-func Register(grpc *grpc.Server, minio minio.Client, timeout time.Duration, logger *zap.Logger) {
+func Register(grpc *grpc.Server, postgres postgres.Client, minio minio.Client, timeout time.Duration, logger *zap.Logger) {
 	fileservice.RegisterFileServiceServer(grpc,
-		&Service{
-			//postgresClient: postgresClient,
-			timout: timeout,
-			minio:  minio,
-			logger: logger,
+		&service{
+			postgres: postgres,
+			minio:    minio,
+			timeout:  timeout,
+			logger:   logger,
 		},
 	)
 }

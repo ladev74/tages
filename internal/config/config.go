@@ -1,7 +1,6 @@
 package config
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -9,16 +8,17 @@ import (
 
 	"fileservice/internal/grpc/grpc_app"
 	"fileservice/internal/sorage/minio"
+	"fileservice/internal/sorage/postgres"
 )
 
 type Config struct {
-	Env   string         `yaml:"env" env-required:"true"`
-	GRPC  grpcapp.Config `yaml:"grpc" env-required:"true"`
-	Minio minio.Config   `yaml:"minio" env-required:"true"`
+	Env      string          `yaml:"env" env-required:"true"`
+	GRPC     grpcapp.Config  `yaml:"grpc" env-required:"true"`
+	Postgres postgres.Config `yaml:"postgres" env-required:"true"`
+	Minio    minio.Config    `yaml:"minio" env-required:"true"`
 }
 
-func New() (*Config, error) {
-	path := fetchPath()
+func New(path string) (*Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path to the config is not specified")
 	}
@@ -34,17 +34,4 @@ func New() (*Config, error) {
 	}
 
 	return &cfg, nil
-}
-
-func fetchPath() string {
-	var path string
-
-	flag.StringVar(&path, "config_path", "", "path to config file")
-	flag.Parse()
-
-	if path == "" {
-		os.Getenv("CONFIG_PATH")
-	}
-
-	return path
 }

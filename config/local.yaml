@@ -5,6 +5,17 @@ grpc:
   operation_timeout: 3s
   shutdown_timeout: 15s
 
+postgres:
+  host: localhost
+  port: 5432
+  user: root
+  password: 1234
+  database: root
+  connection_timeout: 3s
+  operation_timeout: 3s
+  max_connections: 10
+  min_connections: 5
+
 minio:
   host: localhost
   port: 9000

@@ -1,24 +1,30 @@
 package postgres
 
 import (
+	"context"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	fileservice "github.com/ladev74/protos/gen/go/file_service"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 )
 
+const (
+	statusPending = "pending"
+	statusSuccess = "success"
+)
+
 type Config struct {
-	Host              string        `yaml:"postgres_host" env-required:"true"`
-	Port              string        `yaml:"postgres_port" env-required:"true"`
-	User              string        `yaml:"postgres_user" env-required:"true"`
-	Password          string        `yaml:"postgres_password" env-required:"true"`
-	Database          string        `yaml:"postgres_database" env-required:"true"`
-	ConnectionTimeout time.Duration `yaml:"postgres_connection_timeout" env-required:"true"`
-	OperationTimeout  time.Duration `yaml:"postgres_operation_timeout" env-required:"true"`
-	MigrationsPath    string        `yaml:"postgres_migration_path" env-required:"true"`
-	MaxConns          int           `yaml:"postgres_max_connections" env-required:"true"`
-	MinConns          int           `yaml:"postgres_min_connections" env-required:"true"`
+	Host              string        `yaml:"host" env-required:"true"`
+	Port              string        `yaml:"port" env-required:"true"`
+	User              string        `yaml:"user" env-required:"true"`
+	Password          string        `yaml:"password" env-required:"true"`
+	Database          string        `yaml:"database" env-required:"true"`
+	ConnectionTimeout time.Duration `yaml:"connection_timeout" env-required:"true"`
+	OperationTimeout  time.Duration `yaml:"operation_timeout" env-required:"true"`
+	MaxConns          int           `yaml:"max_connections" env-required:"true"`
+	MinConns          int           `yaml:"min_connections" env-required:"true"`
 }
 
 type Storage struct {
@@ -28,6 +34,10 @@ type Storage struct {
 }
 
 type Client interface {
+	SaveFileInfo(ctx context.Context, id string, fileName string, createdAt time.Time, updatedAt time.Time) error
+	SetSuccessStatus(ctx context.Context, id string) error
+	DeleteFileInfo(ctx context.Context, id string) error
+	ListFilesInfo(ctx context.Context, limit int64, offset int64) ([]*fileservice.FileInfo, error)
 	Close()
 }
 

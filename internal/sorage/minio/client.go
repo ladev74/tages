@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO: fatal on restart (bucket exists)
 // TODO: connection timeout?
 // TODO: reties, metrics, ssl
 
@@ -26,7 +27,7 @@ func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, erro
 
 	err = mc.MakeBucket(ctx, config.BucketName, minio.MakeBucketOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("cannot create bucket %s: %w", config.BucketName, err)
+		//return nil, fmt.Errorf("cannot create bucket %s: %w", config.BucketName, err)
 	}
 
 	exists, err := mc.BucketExists(ctx, config.BucketName)

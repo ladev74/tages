@@ -1,12 +1,11 @@
 package service
 
 import (
-	"context"
-
 	fileservice "github.com/ladev74/protos/gen/go/file_service"
+	"google.golang.org/grpc"
 )
 
-func (s *Service) GetFile(ctx context.Context, req *fileservice.GetFileRequest) (*fileservice.GetFileResponse, error) {
+func (s *service) GetFile(*fileservice.GetFileRequest, grpc.ServerStreamingServer[fileservice.GetFileResponse]) error {
 
-	return nil, nil
+	return nil
 }

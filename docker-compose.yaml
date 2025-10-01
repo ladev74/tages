@@ -1,4 +1,19 @@
 services:
+  postgres:
+    image: postgres:17.5
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 1234
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U root" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+#    networks:
+#      - notification-service-net
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: minio
@@ -8,9 +23,9 @@ services:
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: admin_password
-    volumes:
-      - minio_data:/data
+#    volumes:
+#      - minio_data:/data
     command: server /data --console-address ":9001"
 
-volumes:
-  minio_data:
+#volumes:
+#  minio_data:

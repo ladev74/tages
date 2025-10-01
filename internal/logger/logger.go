@@ -8,14 +8,13 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
-
-	"fileservice/internal/config"
+	"google.golang.org/grpc/status"
 )
 
 // TODO: add a logging level to the production logger
 
-func New(cfg *config.Config) (*zap.Logger, error) {
-	switch cfg.Env {
+func New(env string) (*zap.Logger, error) {
+	switch env {
 	case "local":
 		loggerConfig := zap.NewDevelopmentConfig()
 
@@ -44,25 +43,58 @@ func New(cfg *config.Config) (*zap.Logger, error) {
 		return logger, nil
 
 	default:
-		return nil, fmt.Errorf("unknown environment: %s", cfg.Env)
+		return nil, fmt.Errorf("unknown environment: %s", env)
 	}
 }
 
-func Interceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
+func UnaryLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req any,
+		req interface{},
 		info *grpc.UnaryServerInfo,
-		next grpc.UnaryHandler,
+		handler grpc.UnaryHandler,
+	) (resp interface{}, err error) {
+		start := time.Now()
 
-	) (resp any, err error) {
+		resp, err = handler(ctx, req)
 
-		logger.Info(
-			"new request", zap.String("method", info.FullMethod),
-			zap.Any("request", req),
-			zap.Time("time", time.Now()),
+		st, _ := status.FromError(err)
+		duration := time.Since(start)
+
+		logger.Info("gRPC request",
+			zap.String("method", info.FullMethod),
+			zap.Duration("duration", duration),
+			zap.String("status_code", st.Code().String()),
+			zap.Error(err),
 		)
 
-		return next(ctx, req)
+		return resp, err
+	}
+}
+
+func StreamLoggingInterceptor(logger *zap.Logger) grpc.StreamServerInterceptor {
+	return func(
+		srv interface{},
+		ss grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		start := time.Now()
+
+		err := handler(srv, ss)
+
+		st, _ := status.FromError(err)
+		duration := time.Since(start)
+
+		logger.Info("gRPC stream",
+			zap.String("method", info.FullMethod),
+			zap.Bool("is_client_stream", info.IsClientStream),
+			zap.Bool("is_server_stream", info.IsServerStream),
+			zap.Duration("duration", duration),
+			zap.String("status_code", st.Code().String()),
+			zap.Error(err),
+		)
+
+		return err
 	}
 }

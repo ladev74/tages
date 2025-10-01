@@ -7,9 +7,12 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"fileservice/internal/grpc/service"
+	llogger "fileservice/internal/logger"
 	"fileservice/internal/sorage/minio"
+	"fileservice/internal/sorage/postgres"
 )
 
 type Config struct {
@@ -25,10 +28,15 @@ type App struct {
 	logger           *zap.Logger
 }
 
-func New(minio minio.Client, logger *zap.Logger, config *Config) *App {
-	gRPCServer := grpc.NewServer()
+func New(postgres postgres.Client, minio minio.Client, logger *zap.Logger, config *Config) *App {
+	gRPCServer := grpc.NewServer(
+		grpc.UnaryInterceptor(llogger.UnaryLoggingInterceptor(logger)),
+		grpc.StreamInterceptor(llogger.StreamLoggingInterceptor(logger)),
+	)
 
-	service.Register(gRPCServer, minio, config.OperationTimeout, logger)
+	service.Register(gRPCServer, postgres, minio, config.OperationTimeout, logger)
+
+	reflection.Register(gRPCServer)
 
 	return &App{
 		gRPCServer:       gRPCServer,
