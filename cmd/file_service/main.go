@@ -23,6 +23,7 @@ import (
 // TODO: rate limiter
 // TODO: saga
 // TODO: reties
+// TODO: написать README в protos
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),

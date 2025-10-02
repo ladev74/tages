@@ -14,6 +14,7 @@ import (
 	"fileservice/internal/sorage/minio"
 )
 
+// TODO: вынести в конфиг
 const bufSize = 1024 * 32
 
 func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStreamingServer[fileservice.GetFileResponse]) error {
@@ -27,7 +28,6 @@ func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStr
 	}
 
 	object, err := s.objectStorage.GetObject(ctx, id)
-
 	if err != nil {
 		if errors.Is(err, minio.ErrNotFound) {
 			s.logger.Warn("GetFile: file not found")
