@@ -3,30 +3,26 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"log"
+	stdlog "log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"go.uber.org/zap"
 
-	cconfig "fileservice/internal/config"
+	"fileservice/internal/config"
 	"fileservice/internal/grpc/grpc_app"
-	llogger "fileservice/internal/logger"
-	mminio "fileservice/internal/sorage/minio"
-	ppostgres "fileservice/internal/sorage/postgres"
+	"fileservice/internal/logger"
+	"fileservice/internal/sorage/minio"
+	"fileservice/internal/sorage/postgres"
 )
 
-// TODO: ask about:
-// TODO: how to pass path to the config file (when starting by flag?),
-// TODO: is it necessary grpc_app or use only service
-// TODO: alias in import
-// TODO: logging level
-
-// TODO: use buffers
-// TODO: metrics
 // TODO: go doc comm
+// TODO: tests
+
+// TODO: rate limiter
+// TODO: saga
+// TODO: reties
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -39,51 +35,45 @@ func main() {
 
 	configPath := fetchPath()
 
-	config, err := cconfig.New(configPath)
+	cfg, err := config.New(configPath)
 	if err != nil {
-		log.Fatalf("cannot initialize config: %v", err)
+		stdlog.Fatalf("cannot initialize cfg: %v", err)
 	}
 
-	fmt.Println(config)
-
-	logger, err := llogger.New(config.Env)
+	log, err := logger.New(cfg.Env)
 	if err != nil {
-		log.Fatalf("cannot initialize logger: %v", err)
+		stdlog.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	postgres, err := ppostgres.New(ctx, &config.Postgres, logger)
+	objectStorage, err := minio.New(ctx, cfg.Minio, log)
 	if err != nil {
-		logger.Fatal("cannot initialize postgres", zap.Error(err))
+		log.Fatal("cannot initialize minio", zap.Error(err))
 	}
 
-	minio, err := mminio.New(ctx, config.Minio, logger)
-	if err != nil {
-		logger.Fatal("cannot initialize minio", zap.Error(err))
-	}
+	metaStorage, err := postgres.New(ctx, &cfg.Postgres, log)
 
-	application := grpcapp.New(postgres, minio, logger, &config.GRPC)
+	application := grpcapp.New(objectStorage, metaStorage, log, &cfg.GRPC)
 
 	go func() {
 		err = application.Start()
 		if err != nil {
-			logger.Fatal("cannot start grpc server", zap.Error(err))
+			log.Fatal("cannot start grpc server", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
 
-	logger.Info("received shutdown signal")
+	log.Info("received shutdown signal")
 
-	err = application.Stop()
+	application.Stop()
+	// TODO: timeout
 	if err != nil {
-		logger.Fatal("cannot gracefully stop grpc server", zap.Error(err))
+		log.Fatal("cannot gracefully stop grpc server", zap.Error(err))
 	}
 
-	postgres.Close()
+	log.Info("stopping http service", zap.Int("addr", 50051))
 
-	logger.Info("stopping http service", zap.Int("addr", 50051))
-
-	logger.Info("application shutdown completed successfully")
+	log.Info("application shutdown completed successfully")
 }
 
 func fetchPath() string {

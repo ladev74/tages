@@ -21,8 +21,7 @@ type Config struct {
 
 type Client interface {
 	PutObject(ctx context.Context, fileId string, reader io.Reader, size int64) error
-	//PutObject(ctx context.Context, fileId string, buf bytes.Buffer) error
-	//Get(id string) (string, error)
+	GetObject(ctx context.Context, id string) (io.ReadCloser, error)
 	//List(offset int) ([]string, error)
 }
 

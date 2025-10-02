@@ -10,9 +10,8 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"fileservice/internal/grpc/service"
-	llogger "fileservice/internal/logger"
-	"fileservice/internal/sorage/minio"
-	"fileservice/internal/sorage/postgres"
+	"fileservice/internal/limiter"
+	"fileservice/internal/logger"
 )
 
 type Config struct {
@@ -28,13 +27,29 @@ type App struct {
 	logger           *zap.Logger
 }
 
-func New(postgres postgres.Client, minio minio.Client, logger *zap.Logger, config *Config) *App {
+// TODO: вынести в main файл
+
+func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, log *zap.Logger, config *Config) *App {
+	lim := limiter.NewRegistry(5 * time.Minute)
+
+	limCfg := limiter.Config{
+		LoadConcurrent: 3,
+		ReadConcurrent: 3,
+		ClientIdleTTL:  5 * time.Minute,
+		//ClientIDFromMetadataKey: "",
+	}
+
 	gRPCServer := grpc.NewServer(
-		grpc.UnaryInterceptor(llogger.UnaryLoggingInterceptor(logger)),
-		grpc.StreamInterceptor(llogger.StreamLoggingInterceptor(logger)),
+		grpc.ChainUnaryInterceptor(
+			limiter.NewConcurrencyInterceptor(lim).Unary(limCfg),
+			logger.UnaryLoggingInterceptor(log)),
+
+		grpc.ChainStreamInterceptor(
+			limiter.NewConcurrencyInterceptor(lim).Stream(limCfg),
+			logger.StreamLoggingInterceptor(log)),
 	)
 
-	service.Register(gRPCServer, postgres, minio, config.OperationTimeout, logger)
+	service.Register(gRPCServer, objectStorage, metaStorage, config.OperationTimeout, log)
 
 	reflection.Register(gRPCServer)
 
@@ -42,7 +57,7 @@ func New(postgres postgres.Client, minio minio.Client, logger *zap.Logger, confi
 		gRPCServer:       gRPCServer,
 		port:             config.Port,
 		operationTimeout: config.OperationTimeout,
-		logger:           logger,
+		logger:           log,
 	}
 }
 
@@ -64,8 +79,6 @@ func (a *App) Start() error {
 	return nil
 }
 
-func (a *App) Stop() error {
+func (a *App) Stop() {
 	a.gRPCServer.GracefulStop()
-
-	return nil
 }

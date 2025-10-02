@@ -16,7 +16,6 @@ import (
 )
 
 func main() {
-
 	var configPath, migrationPath string
 
 	flag.StringVar(&configPath, "config_path", "", "Path to the config file")

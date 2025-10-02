@@ -1,8 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"time"
 
@@ -14,75 +15,63 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TODO: saga
-// TODO: create file struct?
-
-const emptyFileName = ""
-
 func (s *service) UploadFile(stream grpc.ClientStreamingServer[fileservice.UploadFileRequest, fileservice.UploadFileResponse]) error {
 	ctx, cancel := context.WithTimeout(stream.Context(), s.timeout)
 	defer cancel()
 
 	firstReq, err := stream.Recv()
 	if err != nil {
-		s.logger.Error("UploadFile: failedl to get first request", zap.Error(err))
+		s.logger.Error("UploadFile: failed to receive first chunk", zap.Error(err))
 		return status.Errorf(codes.InvalidArgument, "failed to receive first chunk: %v", err)
 	}
 
 	fileName := firstReq.GetFileName()
-	if fileName == emptyFileName {
+	if fileName == "" {
 		s.logger.Error("UploadFile: empty fileName")
 		return status.Errorf(codes.InvalidArgument, "filename is required")
 	}
 
-	pr, pw := io.Pipe()
+	var buf bytes.Buffer
 
-	go func() {
-		defer pw.Close()
-		if len(firstReq.GetChunk()) > 0 {
-			_, err = pw.Write(firstReq.GetChunk())
-			if err != nil {
-				s.logger.Error("UploadFile: failed to write chunk", zap.Error(err))
-				pw.CloseWithError(fmt.Errorf("failed to write chunk: %w", err))
-				return
-			}
+	if len(firstReq.GetChunk()) > 0 {
+		_, err := buf.Write(firstReq.GetChunk())
+		if err != nil {
+			s.logger.Error("UploadFile: failed to write first chunk to buffer", zap.Error(err))
+			return status.Errorf(codes.Internal, "failed to write first chunk: %v", err)
+		}
+	}
+
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			s.logger.Error("UploadFile: failed to receive chunk", zap.Error(err))
+			return status.Errorf(codes.Internal, "failed to receive chunk: %v", err)
 		}
 
-		for {
-			req, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				s.logger.Error("UploadFile: failed to receive chunk", zap.Error(err))
-				pw.CloseWithError(fmt.Errorf("failed to receive chunk: %w", err))
-				return
-			}
-
-			_, err = pw.Write(req.GetChunk())
-			if err != nil {
-				s.logger.Error("UploadFile: failed to write chunk", zap.Error(err))
-				pw.CloseWithError(fmt.Errorf("failed to write chunk: %w", err))
-				return
-			}
+		_, err = buf.Write(req.GetChunk())
+		if err != nil {
+			s.logger.Error("UploadFile: failed to write chunk to buffer", zap.Error(err))
+			return status.Errorf(codes.Internal, "failed to write chunk: %v", err)
 		}
-	}()
+	}
 
 	id := uuid.New().String()
 	createdAt := time.Now().UTC()
 	updatedAt := time.Now().UTC()
 
-	err = s.postgres.SaveFileInfo(ctx, id, fileName, createdAt, updatedAt)
+	err = s.metaStorage.SaveFileInfo(ctx, id, fileName, createdAt, updatedAt)
 	if err != nil {
 		s.logger.Error("UploadFile: failed to save file info", zap.Error(err))
 		return status.Errorf(codes.Internal, "failed to save file info: %v", err)
 	}
 
-	err = s.minio.PutObject(ctx, id, pr, -1)
+	err = s.objectStorage.PutObject(ctx, id, &buf, int64(buf.Len()))
 	if err != nil {
 		s.logger.Error("UploadFile: failed to put object", zap.Error(err))
-		err = s.postgres.DeleteFileInfo(ctx, id)
+		err = s.metaStorage.DeleteFileInfo(ctx, id)
 		if err != nil {
 			s.logger.Error("UploadFile: failed to delete file info", zap.Error(err))
 			return status.Errorf(codes.Internal, "failed to delete file info: %v", err)
@@ -91,12 +80,13 @@ func (s *service) UploadFile(stream grpc.ClientStreamingServer[fileservice.Uploa
 		return status.Errorf(codes.Internal, "failed to put object: %v", err)
 	}
 
-	err = s.postgres.SetSuccessStatus(ctx, id)
+	err = s.metaStorage.SetSuccessStatus(ctx, id)
 	if err != nil {
 		s.logger.Error("UploadFile: failed to set success status", zap.Error(err))
 		return status.Errorf(codes.Internal, "failed to set success status: %v", err)
 	}
 
+	s.logger.Info("UploadFile: successfully uploaded file", zap.String("id", id))
 	return stream.SendAndClose(
 		&fileservice.UploadFileResponse{
 			FileId: id,

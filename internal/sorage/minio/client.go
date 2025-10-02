@@ -2,6 +2,7 @@ package minio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -10,9 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO: retries!
+// TODO: circuit breaker?
 // TODO: fatal on restart (bucket exists)
 // TODO: connection timeout?
 // TODO: reties, metrics, ssl
+
+var (
+	ErrNotFound = errors.New("object not found")
+)
 
 func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, error) {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
@@ -46,18 +53,38 @@ func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, erro
 	}, nil
 }
 
-func (s *Storage) PutObject(ctx context.Context, fileId string, reader io.Reader, size int64) error {
+func (s *Storage) PutObject(ctx context.Context, id string, reader io.Reader, size int64) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err := s.mc.PutObject(ctx, s.bucketName, fileId, reader, size, minio.PutObjectOptions{
+	_, err := s.mc.PutObject(ctx, s.bucketName, id, reader, size, minio.PutObjectOptions{
 		ContentType: "application/octet-stream",
 	})
 	if err != nil {
-		s.logger.Error("UploadFile: cannot upload file", zap.Error(err))
-		return fmt.Errorf("UploadFile: cannot upload file: %w", err)
+		s.logger.Error("PutObject: cannot upload file", zap.Error(err))
+		return fmt.Errorf("PutObject: cannot upload file: %w", err)
 	}
 
-	s.logger.Info("UploadFile: uploaded successfully", zap.String("file_id", fileId))
+	s.logger.Info("PutObject: successfully put object", zap.String("id", id))
 	return nil
+}
+
+func (s *Storage) GetObject(ctx context.Context, id string) (io.ReadCloser, error) {
+	//ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	//defer cancel()
+
+	object, err := s.mc.GetObject(ctx, s.bucketName, id, minio.GetObjectOptions{})
+	if err != nil {
+		resp := minio.ToErrorResponse(err)
+		if resp.Code == minio.NoSuchKey {
+			s.logger.Warn("GetObject: object not found", zap.String("id", id))
+			return nil, fmt.Errorf("GetObject: %w: %s", ErrNotFound, id)
+		}
+
+		s.logger.Error("GetObject: failed to get object", zap.String("id", id), zap.Error(err))
+		return nil, fmt.Errorf("GetObject: failed to get object: %w", err)
+	}
+
+	s.logger.Info("GetObject: successfully get object", zap.String("id", id))
+	return object, nil
 }

@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/golang-migrate/migrate/database/postgres"
-	_ "github.com/golang-migrate/migrate/source/file"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 	fileservice "github.com/ladev74/protos/gen/go/file_service"
 	"go.uber.org/zap"
@@ -19,7 +15,7 @@ import (
 // TODO: circuit breaker?
 
 func New(ctx context.Context, config *Config, logger *zap.Logger) (*Storage, error) {
-	ctx, cancel := context.WithTimeout(ctx, config.ConnectionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
 
 	dsn := buildDSN(config)
@@ -37,7 +33,7 @@ func New(ctx context.Context, config *Config, logger *zap.Logger) (*Storage, err
 	return &Storage{
 		pool:    pool,
 		logger:  logger,
-		timeout: config.OperationTimeout,
+		timeout: config.Timeout,
 	}, nil
 }
 
