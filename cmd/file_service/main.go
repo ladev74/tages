@@ -19,7 +19,6 @@ import (
 )
 
 // TODO: go doc comm
-// TODO: tests
 
 // TODO: написать README в protos
 
@@ -33,6 +32,9 @@ func main() {
 	defer cancel()
 
 	configPath := fetchPath()
+	if configPath == "" {
+		stdlog.Fatal("config file must specify")
+	}
 
 	cfg, err := config.New(configPath)
 	if err != nil {
@@ -73,7 +75,7 @@ func main() {
 		log.Fatal("cannot gracefully stop grpc server", zap.Error(err))
 	}
 
-	//postgresStorage.Close()
+	postgresStorage.Close()
 
 	log.Info("stopping http service", zap.String("addr", fmt.Sprintf("%s:%d", cfg.GRPC.Host, cfg.GRPC.Port)))
 
@@ -83,12 +85,8 @@ func main() {
 func fetchPath() string {
 	var path string
 
-	flag.StringVar(&path, "config_path", "", "path to config file")
+	flag.StringVar(&path, "config_path", "", "Path to the config file")
 	flag.Parse()
-
-	if path == "" {
-		os.Getenv("CONFIG_PATH")
-	}
 
 	return path
 }

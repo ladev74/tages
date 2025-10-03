@@ -9,6 +9,10 @@ grpc:
   read_concurrent: 3
   idle_ttl: 10m
   grpc_stream_buf_size: 32768
+  max_limit: 1000
+  default_limit: 100
+  max_offset: 100
+  default_offset: 10
 
 postgres:
   host: localhost

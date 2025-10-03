@@ -16,7 +16,7 @@ import (
 )
 
 func (s *service) UploadFile(stream grpc.ClientStreamingServer[fileservice.UploadFileRequest, fileservice.UploadFileResponse]) error {
-	ctx, cancel := context.WithTimeout(stream.Context(), s.timeout)
+	ctx, cancel := context.WithTimeout(stream.Context(), s.config.Timeout)
 	defer cancel()
 
 	firstReq, err := stream.Recv()

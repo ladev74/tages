@@ -10,25 +10,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-//const (
-//	maxLimit     = 1000
-//	defaultLimit = 100
-//
-//	maxOffset     = 100
-//	defaultOffset = 0
-//)
-
 func (s *service) ListFiles(ctx context.Context, req *fileservice.ListFilesRequest) (*fileservice.ListFilesResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
-	limit, reason := validateLimit(req.GetLimit())
+	limit, reason := validateLimit(req.GetLimit(), s.config)
 	if reason != "" {
 		s.logger.Warn(fmt.Sprintf("ListFiles: %s", reason), zap.Int64("limit", limit))
 		return nil, status.Error(codes.InvalidArgument, reason)
 	}
 
-	offset, reason := validateOffset(req.GetOffset())
+	offset, reason := validateOffset(req.GetOffset(), s.config)
 	if reason != "" {
 		s.logger.Warn(fmt.Sprintf("ListFiles: %s", reason), zap.Int64("offset", offset))
 		return nil, status.Error(codes.InvalidArgument, reason)
@@ -44,31 +36,31 @@ func (s *service) ListFiles(ctx context.Context, req *fileservice.ListFilesReque
 	return &fileservice.ListFilesResponse{Files: filesInfo}, nil
 }
 
-func validateLimit(limit int64) (int64, string) {
+func validateLimit(limit int64, cfg *Config) (int64, string) {
 	switch {
 	case limit < 0:
 		return 0, "limit must not be negative"
 
-	case limit > maxLimit:
+	case limit > cfg.MaxLimit:
 		return 0, "too large limit"
 
 	case limit == 0:
-		limit = defaultLimit
+		limit = cfg.DefaultLimit
 	}
 
 	return limit, ""
 }
 
-func validateOffset(offset int64) (int64, string) {
+func validateOffset(offset int64, cfg *Config) (int64, string) {
 	switch {
 	case offset < 0:
 		return 0, "offset must not be negative"
 
-	case offset > maxOffset:
+	case offset > cfg.MaxOffset:
 		return 0, "too large offset"
 
 	case offset == 0:
-		offset = defaultOffset
+		offset = cfg.DefaultOffset
 	}
 
 	return offset, ""

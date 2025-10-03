@@ -12,10 +12,10 @@ import (
 
 type Config struct {
 	BufSize       int
-	MaxLimit      int
-	DefaultLimit  int
-	MaxOffset     int
-	DefaultOffset int
+	MaxLimit      int64
+	DefaultLimit  int64
+	MaxOffset     int64
+	DefaultOffset int64
 	Timeout       time.Duration
 }
 

@@ -23,10 +23,10 @@ type Config struct {
 	ReadConcurrent   int           `yaml:"read_concurrent" env-required:"true"`
 	IdleTTL          time.Duration `yaml:"idle_ttl: 10m" env-default:"10m"`
 	BufSize          int           `yaml:"grpc_stream_buf_size" env-required:"true"`
-	MaxLimit         int           `yaml:"max_limit" env-required:"true"`
-	DefaultLimit     int           `yaml:"default_limit" env-required:"true"`
-	MaxOffset        int           `yaml:"max_offset" env-required:"true"`
-	DefaultOffset    int           `yaml:"default_offset" env-required:"true"`
+	MaxLimit         int64         `yaml:"max_limit" env-required:"true"`
+	DefaultLimit     int64         `yaml:"default_limit" env-required:"true"`
+	MaxOffset        int64         `yaml:"max_offset" env-required:"true"`
+	DefaultOffset    int64         `yaml:"default_offset" env-required:"true"`
 }
 
 type App struct {

@@ -15,7 +15,7 @@ import (
 )
 
 func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStreamingServer[fileservice.GetFileResponse]) error {
-	ctx, cancel := context.WithTimeout(stream.Context(), s.timeout)
+	ctx, cancel := context.WithTimeout(stream.Context(), s.config.Timeout)
 	defer cancel()
 
 	id := req.GetFileId()
@@ -63,7 +63,7 @@ func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStr
 		return status.Errorf(codes.Internal, "failed to send file name: %s", id)
 	}
 
-	buf := make([]byte, s.bufSize)
+	buf := make([]byte, s.config.BufSize)
 
 	for {
 		n, err := object.Read(buf)
