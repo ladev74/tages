@@ -10,23 +10,30 @@ import (
 	"google.golang.org/grpc"
 )
 
-type service struct {
-	fileservice.UnimplementedFileServiceServer
-	//storage Storage
-	objectStorage ObjectStorage
-	metaStorage   MetaStorage
-	timeout       time.Duration
-	logger        *zap.Logger
+type Config struct {
+	BufSize       int
+	MaxLimit      int
+	DefaultLimit  int
+	MaxOffset     int
+	DefaultOffset int
+	Timeout       time.Duration
 }
 
-func Register(grpc *grpc.Server, objectStorage ObjectStorage, metaStorage MetaStorage, timeout time.Duration, logger *zap.Logger) {
+type service struct {
+	fileservice.UnimplementedFileServiceServer
+	objectStorage ObjectStorage
+	metaStorage   MetaStorage
+	logger        *zap.Logger
+	config        *Config
+}
+
+func Register(grpc *grpc.Server, objectStorage ObjectStorage, metaStorage MetaStorage, config *Config, logger *zap.Logger) {
 	fileservice.RegisterFileServiceServer(grpc,
 		&service{
-			//storage: storage,
 			metaStorage:   metaStorage,
 			objectStorage: objectStorage,
-			timeout:       timeout,
 			logger:        logger,
+			config:        config,
 		},
 	)
 }
@@ -43,5 +50,3 @@ type MetaStorage interface {
 	DeleteFileInfo(ctx context.Context, id string) error
 	GetFileName(ctx context.Context, id string) (string, error)
 }
-
-// TODO: generate mock

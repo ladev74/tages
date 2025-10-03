@@ -13,7 +13,6 @@ type Config struct {
 	BucketName  string        `yaml:"bucket_name" env-required:"true"`
 	User        string        `yaml:"user" env-required:"true"`
 	Password    string        `yaml:"password" env-required:"true"`
-	UseSSL      bool          `yaml:"use_ssl"`
 	Timeout     time.Duration `yaml:"timeout" env-required:"true"`
 	MaxRetries  int           `yaml:"max_retries" env-required:"true"`
 	BaseBackoff time.Duration `yaml:"base_backoff" env-required:"true"`

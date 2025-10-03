@@ -14,9 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// TODO: circuit breaker?
-// TODO: ssl
-
 var (
 	ErrNotFound = errors.New("object not found")
 )
@@ -28,8 +25,7 @@ func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, erro
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 
 	mc, err := minio.New(addr, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.User, config.Password, ""),
-		Secure: config.UseSSL,
+		Creds: credentials.NewStaticV4(config.User, config.Password, ""),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize minio client: %w", err)

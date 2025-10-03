@@ -22,6 +22,11 @@ type Config struct {
 	LoadConcurrent   int           `yaml:"load_concurrent" env-required:"true"`
 	ReadConcurrent   int           `yaml:"read_concurrent" env-required:"true"`
 	IdleTTL          time.Duration `yaml:"idle_ttl: 10m" env-default:"10m"`
+	BufSize          int           `yaml:"grpc_stream_buf_size" env-required:"true"`
+	MaxLimit         int           `yaml:"max_limit" env-required:"true"`
+	DefaultLimit     int           `yaml:"default_limit" env-required:"true"`
+	MaxOffset        int           `yaml:"max_offset" env-required:"true"`
+	DefaultOffset    int           `yaml:"default_offset" env-required:"true"`
 }
 
 type App struct {
@@ -49,7 +54,16 @@ func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, l
 		),
 	)
 
-	service.Register(gRPCServer, objectStorage, metaStorage, config.OperationTimeout, log)
+	serviceConfig := &service.Config{
+		BufSize:       config.BufSize,
+		MaxLimit:      config.MaxLimit,
+		DefaultLimit:  config.DefaultLimit,
+		MaxOffset:     config.MaxOffset,
+		DefaultOffset: config.DefaultOffset,
+		Timeout:       config.OperationTimeout,
+	}
+
+	service.Register(gRPCServer, objectStorage, metaStorage, serviceConfig, log)
 
 	reflection.Register(gRPCServer)
 
@@ -64,7 +78,6 @@ func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, l
 
 func (a *App) Start() error {
 	addr := fmt.Sprintf("%s:%d", a.host, a.port)
-	fmt.Println(addr)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {

@@ -14,11 +14,6 @@ import (
 	"fileservice/internal/sorage/minio"
 )
 
-// TODO: вынести в конфиг
-// TODO: возвращать имя
-
-const bufSize = 1024 * 32
-
 func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStreamingServer[fileservice.GetFileResponse]) error {
 	ctx, cancel := context.WithTimeout(stream.Context(), s.timeout)
 	defer cancel()
@@ -68,7 +63,7 @@ func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStr
 		return status.Errorf(codes.Internal, "failed to send file name: %s", id)
 	}
 
-	buf := make([]byte, bufSize)
+	buf := make([]byte, s.bufSize)
 
 	for {
 		n, err := object.Read(buf)

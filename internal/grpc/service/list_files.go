@@ -10,14 +10,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TODO: вынести в конфиг
-const (
-	maxLimit     = 1_000_000
-	defaultLimit = 100
-
-	maxOffset     = 1_000_000
-	defaultOffset = 0
-)
+//const (
+//	maxLimit     = 1000
+//	defaultLimit = 100
+//
+//	maxOffset     = 100
+//	defaultOffset = 0
+//)
 
 func (s *service) ListFiles(ctx context.Context, req *fileservice.ListFilesRequest) (*fileservice.ListFilesResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)

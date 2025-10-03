@@ -8,6 +8,7 @@ grpc:
   load_concurrent: 3
   read_concurrent: 3
   idle_ttl: 10m
+  grpc_stream_buf_size: 32768
 
 postgres:
   host: localhost
@@ -27,7 +28,6 @@ minio:
   bucket_name: images
   user: admin
   password: admin_password
-  use_ssl: false
   timeout: 3s
   max_retries: 3
   base_backoff: 3s

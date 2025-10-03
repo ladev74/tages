@@ -16,8 +16,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TODO: circuit breaker?
-
 const (
 	statusPending = "pending"
 	statusSuccess = "success"
