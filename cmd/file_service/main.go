@@ -20,9 +20,6 @@ import (
 // TODO: go doc comm
 // TODO: tests
 
-// TODO: rate limiter
-// TODO: saga
-// TODO: reties
 // TODO: написать README в protos
 
 func main() {
@@ -82,10 +79,6 @@ func fetchPath() string {
 
 	flag.StringVar(&path, "config_path", "", "path to config file")
 	flag.Parse()
-
-	if path == "" {
-		os.Getenv("CONFIG_PATH")
-	}
 
 	return path
 }
