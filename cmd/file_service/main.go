@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	stdlog "log"
 	"os"
 	"os/signal"
@@ -43,14 +44,17 @@ func main() {
 		stdlog.Fatalf("cannot initialize logger: %v", err)
 	}
 
-	objectStorage, err := minio.New(ctx, cfg.Minio, log)
+	minioStorage, err := minio.New(ctx, cfg.Minio, log)
 	if err != nil {
 		log.Fatal("cannot initialize minio", zap.Error(err))
 	}
 
-	metaStorage, err := postgres.New(ctx, &cfg.Postgres, log)
+	postgresStorage, err := postgres.New(ctx, &cfg.Postgres, log)
+	if err != nil {
+		log.Fatal("cannot initialize postgres", zap.Error(err))
+	}
 
-	application := grpcapp.New(objectStorage, metaStorage, log, &cfg.GRPC)
+	application := grpcapp.New(minioStorage, postgresStorage, log, &cfg.GRPC)
 
 	go func() {
 		err = application.Start()
@@ -69,7 +73,9 @@ func main() {
 		log.Fatal("cannot gracefully stop grpc server", zap.Error(err))
 	}
 
-	log.Info("stopping http service", zap.Int("addr", 50051))
+	//postgresStorage.Close()
+
+	log.Info("stopping http service", zap.String("addr", fmt.Sprintf("%s:%d", cfg.GRPC.Host, cfg.GRPC.Port)))
 
 	log.Info("application shutdown completed successfully")
 }

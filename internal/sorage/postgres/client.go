@@ -23,8 +23,6 @@ const (
 	statusSuccess = "success"
 )
 
-var ErrNotFound = errors.New("files not found")
-
 func New(ctx context.Context, config *Config, logger *zap.Logger) (*Storage, error) {
 	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
@@ -139,17 +137,41 @@ func (s *Storage) DeleteFileInfo(ctx context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (struct{}, error) {
-		_, err := s.pool.Exec(ctx, queryDeleteFileInfo, id)
-		return struct{}{}, err
+	tag, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (pgconn.CommandTag, error) {
+		tag, err := s.pool.Exec(ctx, queryDeleteFileInfo, id)
+		return tag, err
 	})
 	if err != nil {
 		s.logger.Error("Delete: failed to delete file info", zap.String("id", id), zap.Error(err))
 		return fmt.Errorf("Delete: failed to delete file info")
 	}
 
+	if tag.RowsAffected() == 0 {
+		s.logger.Error("SetSuccessStatus: no rows affected")
+		return fmt.Errorf("SetSuccessStatus: no rows affected")
+	}
+
 	s.logger.Info("Delete: successfully deleted file info", zap.String("id", id))
 	return nil
+}
+
+func (s *Storage) GetFileName(ctx context.Context, id string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+
+	var fileName string
+
+	_, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (struct{}, error) {
+		err := s.pool.QueryRow(ctx, queryGetFIleName, id).Scan(&fileName)
+		return struct{}{}, err
+	})
+	if err != nil {
+		s.logger.Error("GetFileName: failed to get file info", zap.String("id", id), zap.Error(err))
+		return "", fmt.Errorf("GetFileName: failed to get file info: %w", err)
+	}
+
+	s.logger.Info("GetFileName: successfully retrieved file info", zap.String("id", id))
+	return fileName, nil
 }
 
 func (s *Storage) Close() {
@@ -164,6 +186,14 @@ func withRetry[T any](ctx context.Context, maxRetries int, baseBackoff time.Dura
 		res, err := fn()
 		if err == nil {
 			return res, nil
+		}
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "42P01" {
+				logger.Error("withRetry: non-retryable Postgres error", zap.Error(err))
+				return zero, err
+			}
 		}
 
 		lastErr = err

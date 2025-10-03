@@ -1,9 +1,13 @@
 env: local
 
 grpc:
+  host: localhost
   port: 50051
   operation_timeout: 3s
   shutdown_timeout: 15s
+  load_concurrent: 3
+  read_concurrent: 3
+  idle_ttl: 10m
 
 postgres:
   host: localhost

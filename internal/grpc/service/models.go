@@ -41,6 +41,7 @@ type MetaStorage interface {
 	SetSuccessStatus(ctx context.Context, id string) error
 	ListFilesInfo(ctx context.Context, limit int64, offset int64) ([]*fileservice.FileInfo, error)
 	DeleteFileInfo(ctx context.Context, id string) error
+	GetFileName(ctx context.Context, id string) (string, error)
 }
 
 // TODO: generate mock

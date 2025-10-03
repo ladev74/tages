@@ -47,6 +47,27 @@ func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStr
 		}
 	}()
 
+	fileName, err := s.metaStorage.GetFileName(ctx, id)
+	if err != nil {
+		if errors.Is(err, minio.ErrNotFound) {
+			s.logger.Warn("GetFile: file not found")
+			return status.Errorf(codes.NotFound, "file not found")
+		}
+
+		s.logger.Error("GetFile: failed to get file name", zap.String("id", id), zap.Error(err))
+		return status.Errorf(codes.Internal, "failed to get file name: %s", id)
+	}
+
+	firstResp := &fileservice.GetFileResponse{
+		FileName: fileName,
+	}
+
+	err = stream.Send(firstResp)
+	if err != nil {
+		s.logger.Error("GetFile: failed to send file name", zap.String("id", id), zap.Error(err))
+		return status.Errorf(codes.Internal, "failed to send file name: %s", id)
+	}
+
 	buf := make([]byte, bufSize)
 
 	for {

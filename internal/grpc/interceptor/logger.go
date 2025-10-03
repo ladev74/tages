@@ -9,7 +9,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func UnaryLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
+type LoggingInterceptor struct {
+	logger *zap.Logger
+}
+
+func NewLoggingInterceptor(logger *zap.Logger) *LoggingInterceptor {
+	return &LoggingInterceptor{logger: logger}
+}
+
+func (li *LoggingInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
@@ -18,7 +26,7 @@ func UnaryLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 	) (resp interface{}, err error) {
 		start := time.Now()
 
-		logger.Info("New unary request",
+		li.logger.Info("New unary request",
 			zap.String("method", info.FullMethod),
 		)
 
@@ -27,7 +35,7 @@ func UnaryLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 		st, _ := status.FromError(err)
 		duration := time.Since(start)
 
-		logger.Info("Unary request completed",
+		li.logger.Info("Unary request completed",
 			zap.String("method", info.FullMethod),
 			zap.Duration("duration", duration),
 			zap.String("status_code", st.Code().String()),
@@ -38,7 +46,7 @@ func UnaryLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 	}
 }
 
-func StreamLoggingInterceptor(logger *zap.Logger) grpc.StreamServerInterceptor {
+func (li *LoggingInterceptor) StreamLoggingInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		srv interface{},
 		ss grpc.ServerStream,
@@ -47,7 +55,7 @@ func StreamLoggingInterceptor(logger *zap.Logger) grpc.StreamServerInterceptor {
 	) error {
 		start := time.Now()
 
-		logger.Info("New stream request",
+		li.logger.Info("New stream request",
 			zap.String("method", info.FullMethod),
 		)
 
@@ -56,7 +64,7 @@ func StreamLoggingInterceptor(logger *zap.Logger) grpc.StreamServerInterceptor {
 		st, _ := status.FromError(err)
 		duration := time.Since(start)
 
-		logger.Info("Stream request completed",
+		li.logger.Info("Stream request completed",
 			zap.String("method", info.FullMethod),
 			zap.Bool("is_client_stream", info.IsClientStream),
 			zap.Bool("is_server_stream", info.IsServerStream),

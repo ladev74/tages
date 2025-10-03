@@ -9,4 +9,6 @@ const (
 
 	queryListFilesInfo = `SELECT name, created_at, updated_at 
 						FROM schema_files.table_files ORDER BY created_at DESC LIMIT $1	OFFSET $2`
+
+	queryGetFIleName = `SELECT name FROM schema_files.table_files WHERE id = $1`
 )

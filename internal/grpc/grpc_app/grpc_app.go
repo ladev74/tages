@@ -15,40 +15,37 @@ import (
 )
 
 type Config struct {
+	Host             string        `yaml:"host" env-required:"true"`
 	Port             int           `yaml:"port" env-required:"true"`
 	OperationTimeout time.Duration `yaml:"operation_timeout" env-required:"true"`
 	ShutdownTimeout  time.Duration `yaml:"shutdown_timeout" env-required:"true"`
+	LoadConcurrent   int           `yaml:"load_concurrent" env-required:"true"`
+	ReadConcurrent   int           `yaml:"read_concurrent" env-required:"true"`
+	IdleTTL          time.Duration `yaml:"idle_ttl: 10m" env-default:"10m"`
 }
 
 type App struct {
 	gRPCServer       *grpc.Server
+	host             string
 	port             int
 	operationTimeout time.Duration
 	logger           *zap.Logger
 }
 
-// TODO: вынести в main файл
-
 func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, log *zap.Logger, config *Config) *App {
+	lim := limiter.NewRegistry(config.LoadConcurrent, config.ReadConcurrent, config.IdleTTL)
 
-	limCfg := &limiter.Config{
-		LoadConcurrent: 3,
-		ReadConcurrent: 3,
-		TTL:            5 * time.Minute,
-	}
-
-	lim := limiter.NewRegistry(limCfg)
-
-	concurrencyInterceptor := interceptor.New(lim)
+	concurrencyInterceptor := interceptor.NewConcurrencyInterceptor(lim, log)
+	loggingInterceptor := interceptor.NewLoggingInterceptor(log)
 
 	gRPCServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			concurrencyInterceptor.Unary(),
-			interceptor.UnaryLoggingInterceptor(log),
+			loggingInterceptor.Unary(),
 		),
 		grpc.ChainStreamInterceptor(
 			concurrencyInterceptor.Stream(),
-			interceptor.StreamLoggingInterceptor(log),
+			loggingInterceptor.StreamLoggingInterceptor(),
 		),
 	)
 
@@ -58,6 +55,7 @@ func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, l
 
 	return &App{
 		gRPCServer:       gRPCServer,
+		host:             config.Host,
 		port:             config.Port,
 		operationTimeout: config.OperationTimeout,
 		logger:           log,
@@ -65,13 +63,16 @@ func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, l
 }
 
 func (a *App) Start() error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", a.port))
+	addr := fmt.Sprintf("%s:%d", a.host, a.port)
+	fmt.Println(addr)
+
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		a.logger.Error("Start: failed to create listen", zap.Error(err))
 		return fmt.Errorf("Start: failed to create listen: %w", err)
 	}
 
-	a.logger.Info("Start: gRPC server is starting", zap.Int("port", a.port))
+	a.logger.Info("Start: gRPC server is starting", zap.String("addr", addr))
 
 	err = a.gRPCServer.Serve(lis)
 	if err != nil {

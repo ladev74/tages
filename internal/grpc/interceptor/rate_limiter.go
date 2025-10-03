@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -14,14 +15,16 @@ import (
 
 type ConcurrencyInterceptor struct {
 	registry  *limiter.Registry
+	logger    *zap.Logger
 	OnAcquire func(method, clientID, kind string)
 	OnRelease func(method, clientID, kind string)
 	OnReject  func(method, clientID, kind string)
 }
 
-func New(registry *limiter.Registry) *ConcurrencyInterceptor {
+func NewConcurrencyInterceptor(registry *limiter.Registry, logger *zap.Logger) *ConcurrencyInterceptor {
 	return &ConcurrencyInterceptor{
 		registry: registry,
+		logger:   logger,
 	}
 
 }
@@ -72,6 +75,12 @@ func (ci *ConcurrencyInterceptor) Unary() grpc.UnaryServerInterceptor {
 					go ci.OnReject(info.FullMethod, clientID, kind)
 				}
 
+				ci.logger.Warn("Too many concurrent requests",
+					zap.String("clientID", clientID),
+					zap.String("method", info.FullMethod),
+					zap.String("kind", kind),
+				)
+
 				return nil, status.Error(codes.ResourceExhausted, "too many concurrent ListFiles requests")
 			}
 
@@ -91,6 +100,12 @@ func (ci *ConcurrencyInterceptor) Unary() grpc.UnaryServerInterceptor {
 				if ci.OnReject != nil {
 					go ci.OnReject(info.FullMethod, clientID, kind)
 				}
+
+				ci.logger.Warn("Too many concurrent requests",
+					zap.String("clientID", clientID),
+					zap.String("method", info.FullMethod),
+					zap.String("kind", kind),
+				)
 
 				return nil, status.Error(codes.ResourceExhausted, "too many concurrent Upload/Download requests")
 			}
@@ -129,6 +144,12 @@ func (ci *ConcurrencyInterceptor) Stream() grpc.StreamServerInterceptor {
 					go ci.OnReject(info.FullMethod, clientID, kind)
 				}
 
+				ci.logger.Warn("Too many concurrent requests",
+					zap.String("clientID", clientID),
+					zap.String("method", info.FullMethod),
+					zap.String("kind", kind),
+				)
+
 				return status.Error(codes.ResourceExhausted, "too many concurrent ListFiles requests")
 			}
 
@@ -148,6 +169,12 @@ func (ci *ConcurrencyInterceptor) Stream() grpc.StreamServerInterceptor {
 				if ci.OnReject != nil {
 					go ci.OnReject(info.FullMethod, clientID, kind)
 				}
+
+				ci.logger.Warn("Too many concurrent requests",
+					zap.String("clientID", clientID),
+					zap.String("method", info.FullMethod),
+					zap.String("kind", kind),
+				)
 
 				return status.Error(codes.ResourceExhausted, "too many concurrent Upload/Download requests")
 			}

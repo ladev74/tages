@@ -7,9 +7,9 @@ import (
 )
 
 type Config struct {
-	LoadConcurrent int           `yaml:"load_concurrent" env-default:"10"`
-	ReadConcurrent int           `yaml:"read_concurrent" env-default:"100"`
-	TTL            time.Duration `yaml:"client_idle_ttl" env-default:"10m"`
+	LoadConcurrent int
+	ReadConcurrent int
+	TTL            time.Duration
 }
 
 type ClientLimiter struct {
@@ -73,15 +73,20 @@ type clientEntry struct {
 type Registry struct {
 	mu      sync.Mutex
 	clients map[string]*clientEntry
-	//ttl     time.Duration
-	config *Config
-	stop   chan struct{}
+	config  *Config
+	stop    chan struct{}
 
 	OnNewClient func(clientID string)
 	OnPurge     func(clientID string)
 }
 
-func NewRegistry(config *Config) *Registry {
+func NewRegistry(loadConcurrent int, readConcurrent int, ttl time.Duration) *Registry {
+	config := &Config{
+		LoadConcurrent: loadConcurrent,
+		ReadConcurrent: readConcurrent,
+		TTL:            ttl,
+	}
+
 	r := &Registry{
 		clients: make(map[string]*clientEntry),
 		config:  config,
