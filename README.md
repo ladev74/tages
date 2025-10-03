@@ -7,8 +7,9 @@
 ```text
 tages - это gRPC сервис для хранения, загрузки и получения файлов.
 Использует MinIO для хранения объектов и PostgreSQL для метаданных файлов,
-proto файл как и сгенерированный код находятся в репозитории [https://github.com/ladev74/protos](https://github.com/ladev74/protos)
+proto файл как и сгенерированный код находятся в репозитории:
 ```
+ [protos](https://github.com/ladev74/protos)
 ---
 
 ## Запуск
