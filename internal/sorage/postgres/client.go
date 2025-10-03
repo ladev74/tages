@@ -2,17 +2,28 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	fileservice "github.com/ladev74/protos/gen/go/file_service"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TODO: retries!
 // TODO: circuit breaker?
+
+const (
+	statusPending = "pending"
+	statusSuccess = "success"
+)
+
+var ErrNotFound = errors.New("files not found")
 
 func New(ctx context.Context, config *Config, logger *zap.Logger) (*Storage, error) {
 	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
@@ -31,9 +42,11 @@ func New(ctx context.Context, config *Config, logger *zap.Logger) (*Storage, err
 	}
 
 	return &Storage{
-		pool:    pool,
-		logger:  logger,
-		timeout: config.Timeout,
+		pool:        pool,
+		logger:      logger,
+		timeout:     config.Timeout,
+		maxRetries:  config.MaxRetries,
+		baseBackoff: config.BaseBackoff,
 	}, nil
 }
 
@@ -41,13 +54,16 @@ func (s *Storage) SaveFileInfo(ctx context.Context, id string, fileName string, 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	tag, err := s.pool.Exec(ctx, querySaveFileInfo, id, fileName, createdAt, updatedAt, statusPending)
+	tag, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (pgconn.CommandTag, error) {
+		tag, err := s.pool.Exec(ctx, querySaveFileInfo, id, fileName, createdAt, updatedAt, statusPending)
+		return tag, err
+	})
 	if err != nil {
 		s.logger.Error("Save: failed to insert file", zap.Error(err))
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		s.logger.Error("Save: no rows affected", zap.Error(err))
+		s.logger.Error("Save: no rows affected")
 		return fmt.Errorf("Save: no rows affected")
 	}
 
@@ -59,13 +75,16 @@ func (s *Storage) SetSuccessStatus(ctx context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	tag, err := s.pool.Exec(ctx, querySetSuccessStatus, statusSuccess, id)
+	tag, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (pgconn.CommandTag, error) {
+		tag, err := s.pool.Exec(ctx, querySetSuccessStatus, statusSuccess, id)
+		return tag, err
+	})
 	if err != nil {
 		s.logger.Error("SetSuccessStatus: failed to set success status", zap.Error(err))
 		return fmt.Errorf("SetSuccessStatus: failed to set success status: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		s.logger.Error("SetSuccessStatus: no rows affected", zap.Error(err))
+		s.logger.Error("SetSuccessStatus: no rows affected")
 		return fmt.Errorf("SetSuccessStatus: no rows affected")
 	}
 
@@ -77,7 +96,10 @@ func (s *Storage) ListFilesInfo(ctx context.Context, limit int64, offset int64) 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	rows, err := s.pool.Query(ctx, queryListFilesInfo, limit, offset)
+	rows, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (pgx.Rows, error) {
+		rows, err := s.pool.Query(ctx, queryListFilesInfo, limit, offset)
+		return rows, err
+	})
 	if err != nil {
 		s.logger.Error("ListFilesInfo: failed to get files", zap.Error(err))
 		return nil, fmt.Errorf("ListFilesInfo: failed to get files: %w", err)
@@ -117,7 +139,10 @@ func (s *Storage) DeleteFileInfo(ctx context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err := s.pool.Exec(ctx, queryDeleteFileInfo, id)
+	_, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (struct{}, error) {
+		_, err := s.pool.Exec(ctx, queryDeleteFileInfo, id)
+		return struct{}{}, err
+	})
 	if err != nil {
 		s.logger.Error("Delete: failed to delete file info", zap.String("id", id), zap.Error(err))
 		return fmt.Errorf("Delete: failed to delete file info")
@@ -129,6 +154,39 @@ func (s *Storage) DeleteFileInfo(ctx context.Context, id string) error {
 
 func (s *Storage) Close() {
 	s.pool.Close()
+}
+
+func withRetry[T any](ctx context.Context, maxRetries int, baseBackoff time.Duration, logger *zap.Logger, fn func() (T, error)) (T, error) {
+	var zero T
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		res, err := fn()
+		if err == nil {
+			return res, nil
+		}
+
+		lastErr = err
+
+		if i == maxRetries-1 {
+			break
+		}
+
+		backoff := baseBackoff * time.Duration(math.Pow(2, float64(i)))
+		jitter := time.Duration(rand.Float64() * float64(baseBackoff))
+		pause := backoff + jitter
+
+		select {
+		case <-time.After(pause):
+		case <-ctx.Done():
+			logger.Error("withRetry: context canceled", zap.Int("attempts", i+1), zap.Duration("backoff", baseBackoff))
+			return zero, ctx.Err()
+		}
+
+		logger.Warn("withRetry: retrying", zap.Int("attempt", i+1), zap.Duration("backoff", pause))
+	}
+
+	return zero, fmt.Errorf("withRetry: all retries failed, lastErr: %w", lastErr)
 }
 
 func buildDSN(config *Config) string {

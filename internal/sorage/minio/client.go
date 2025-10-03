@@ -5,23 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
 )
 
-// TODO: retries!
 // TODO: circuit breaker?
-// TODO: fatal on restart (bucket exists)
-// TODO: connection timeout?
-// TODO: reties, metrics, ssl
+// TODO: ssl
 
 var (
 	ErrNotFound = errors.New("object not found")
 )
 
 func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, error) {
+	ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+	defer cancel()
+
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 
 	mc, err := minio.New(addr, &minio.Options{
@@ -34,7 +37,10 @@ func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, erro
 
 	err = mc.MakeBucket(ctx, config.BucketName, minio.MakeBucketOptions{})
 	if err != nil {
-		//return nil, fmt.Errorf("cannot create bucket %s: %w", config.BucketName, err)
+		resp := minio.ToErrorResponse(err)
+		if resp.Code != "BucketAlreadyOwnedByYou" {
+			return nil, fmt.Errorf("cannot create bucket %s: %w", config.BucketName, err)
+		}
 	}
 
 	exists, err := mc.BucketExists(ctx, config.BucketName)
@@ -46,10 +52,12 @@ func New(ctx context.Context, config Config, logger *zap.Logger) (*Storage, erro
 	}
 
 	return &Storage{
-		mc:         mc,
-		bucketName: config.BucketName,
-		timeout:    config.OperationTimeout,
-		logger:     logger,
+		mc:          mc,
+		bucketName:  config.BucketName,
+		timeout:     config.Timeout,
+		logger:      logger,
+		maxRetries:  config.MaxRetries,
+		baseBackoff: config.BaseBackoff,
 	}, nil
 }
 
@@ -57,8 +65,11 @@ func (s *Storage) PutObject(ctx context.Context, id string, reader io.Reader, si
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err := s.mc.PutObject(ctx, s.bucketName, id, reader, size, minio.PutObjectOptions{
-		ContentType: "application/octet-stream",
+	_, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (struct{}, error) {
+		_, err := s.mc.PutObject(ctx, s.bucketName, id, reader, size, minio.PutObjectOptions{
+			ContentType: "application/octet-stream",
+		})
+		return struct{}{}, err
 	})
 	if err != nil {
 		s.logger.Error("PutObject: cannot upload file", zap.Error(err))
@@ -70,10 +81,9 @@ func (s *Storage) PutObject(ctx context.Context, id string, reader io.Reader, si
 }
 
 func (s *Storage) GetObject(ctx context.Context, id string) (io.ReadCloser, error) {
-	//ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	//defer cancel()
-
-	object, err := s.mc.GetObject(ctx, s.bucketName, id, minio.GetObjectOptions{})
+	object, err := withRetry(ctx, s.maxRetries, s.baseBackoff, s.logger, func() (*minio.Object, error) {
+		return s.mc.GetObject(ctx, s.bucketName, id, minio.GetObjectOptions{})
+	})
 	if err != nil {
 		resp := minio.ToErrorResponse(err)
 		if resp.Code == minio.NoSuchKey {
@@ -87,4 +97,40 @@ func (s *Storage) GetObject(ctx context.Context, id string) (io.ReadCloser, erro
 
 	s.logger.Info("GetObject: successfully get object", zap.String("id", id))
 	return object, nil
+}
+
+func withRetry[T any](ctx context.Context, maxRetries int, baseBackoff time.Duration, logger *zap.Logger, fn func() (T, error)) (T, error) {
+	var zero T
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		res, err := fn()
+		switch {
+		case err == nil:
+			return res, nil
+		case errors.Is(err, ErrNotFound):
+			return zero, ErrNotFound
+		}
+
+		lastErr = err
+
+		if i == maxRetries-1 {
+			break
+		}
+
+		backoff := baseBackoff * time.Duration(math.Pow(2, float64(i)))
+		jitter := time.Duration(rand.Float64() * float64(baseBackoff))
+		pause := backoff + jitter
+
+		select {
+		case <-time.After(pause):
+		case <-ctx.Done():
+			logger.Error("withRetry: context canceled", zap.Int("attempts", i+1), zap.Duration("backoff", baseBackoff))
+			return zero, ctx.Err()
+		}
+
+		logger.Warn("withRetry: retrying", zap.Int("attempt", i+1), zap.Duration("backoff", pause))
+	}
+
+	return zero, fmt.Errorf("withRetry: all retries failed, lastErr: %w", lastErr)
 }

@@ -2,7 +2,7 @@ env: local
 
 grpc:
   port: 50051
-  operation_timeout: 30s
+  operation_timeout: 3s
   shutdown_timeout: 15s
 
 postgres:
@@ -12,6 +12,8 @@ postgres:
   password: 1234
   database: root
   timeout: 3s
+  max_retries: 3
+  base_backoff: 3s
   max_connections: 10
   min_connections: 5
 
@@ -22,4 +24,6 @@ minio:
   user: admin
   password: admin_password
   use_ssl: false
-  operation_timeout: 30s
+  timeout: 3s
+  max_retries: 3
+  base_backoff: 3s
