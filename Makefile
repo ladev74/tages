@@ -13,4 +13,13 @@ start-app:
 down:
 	docker compose down
 
+demo-upload:
+	go run cmd/demo/main.go --config_path=config/local.yaml --method=upload --image_path=test.jpg
+
+demo-get:
+	go run cmd/demo/main.go --config_path=config/local.yaml --method=get --id=$(id)
+
+demo-list:
+	go run cmd/demo/main.go --config_path=config/local.yaml --method=list
+
 all: start-postgres start-minio up-migration start-app

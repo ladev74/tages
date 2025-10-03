@@ -59,8 +59,6 @@ func validateOffset(offset int64, cfg *Config) (int64, string) {
 	case offset > cfg.MaxOffset:
 		return 0, "too large offset"
 
-	case offset == 0:
-		offset = cfg.DefaultOffset
 	}
 
 	return offset, ""
