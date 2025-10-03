@@ -11,12 +11,11 @@ import (
 	fileservice "github.com/ladev74/protos/gen/go/file_service"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"fileservice/internal/config"
 	"fileservice/internal/logger"
 )
-
-const defaultWorkerQuantity = 10
 
 type demo struct {
 	client fileservice.FileServiceClient
@@ -51,7 +50,7 @@ func main() {
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.GRPC.Host, cfg.GRPC.Port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("cannot connect to grpc server", zap.Error(err))
 	}
@@ -96,7 +95,7 @@ func (d *demo) demoUpload(imagePath string) {
 		d.logger.Fatal("demoUpload: cannot create upload stream", zap.Error(err))
 	}
 
-	buf := make([]byte, 32*1024) // 32KB
+	buf := make([]byte, 32*1024)
 	for {
 		n, err := f.Read(buf)
 		if err == io.EOF {
@@ -121,7 +120,7 @@ func (d *demo) demoUpload(imagePath string) {
 		d.logger.Fatal("demoUpload: failed to close and receive", zap.Error(err))
 	}
 
-	d.logger.Info("File uploaded successfully", zap.String("file_id", resp.GetFileId()))
+	d.logger.Info("demoUpload: file uploaded successfully", zap.String("file_id", resp.GetFileId()))
 }
 
 func (d *demo) demoGet(fileID string) {
@@ -154,7 +153,7 @@ func (d *demo) demoGet(fileID string) {
 		}
 	}
 
-	d.logger.Info("File downloaded successfully", zap.String("file_name", outFile.Name()))
+	d.logger.Info("demoGet: file downloaded successfully", zap.String("file_name", outFile.Name()))
 }
 
 func (d *demo) demoList() {
@@ -166,8 +165,9 @@ func (d *demo) demoList() {
 		d.logger.Fatal("demoList: failed to list files", zap.Error(err))
 	}
 
-	d.logger.Info("Files list retrieved", zap.Int("count", len(resp.Files)))
+	d.logger.Info("demoList: files list retrieved", zap.Int("count", len(resp.Files)))
 	for _, file := range resp.Files {
-		fmt.Printf("id: %s, created_at: %s, updated_at: %s\n", file.Name, file.CreatedAt, file.UpdatedAt)
+		fmt.Printf("id: %s, created_at: %s, updated_at: %s\n",
+			file.Name, file.CreatedAt.AsTime(), file.UpdatedAt.AsTime())
 	}
 }

@@ -18,8 +18,6 @@ import (
 	"fileservice/internal/sorage/postgres"
 )
 
-// TODO: go doc comm
-
 // TODO: написать README в protos
 
 func main() {
@@ -33,7 +31,7 @@ func main() {
 
 	configPath := fetchPath()
 	if configPath == "" {
-		stdlog.Fatal("config file must specify")
+		stdlog.Fatal("config path must specify")
 	}
 
 	cfg, err := config.New(configPath)
@@ -66,11 +64,9 @@ func main() {
 	}()
 
 	<-ctx.Done()
-
 	log.Info("received shutdown signal")
 
 	application.Stop()
-	// TODO: timeout
 	if err != nil {
 		log.Fatal("cannot gracefully stop grpc server", zap.Error(err))
 	}
