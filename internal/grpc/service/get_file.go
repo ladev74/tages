@@ -15,6 +15,8 @@ import (
 )
 
 // TODO: вынести в конфиг
+// TODO: возвращать имя
+
 const bufSize = 1024 * 32
 
 func (s *service) GetFile(req *fileservice.GetFileRequest, stream grpc.ServerStreamingServer[fileservice.GetFileResponse]) error {

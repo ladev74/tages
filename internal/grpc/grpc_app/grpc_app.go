@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"fileservice/internal/grpc/interceptor"
 	"fileservice/internal/grpc/service"
 	"fileservice/internal/limiter"
-	"fileservice/internal/logger"
 )
 
 type Config struct {
@@ -30,23 +30,26 @@ type App struct {
 // TODO: вынести в main файл
 
 func New(objectStorage service.ObjectStorage, metaStorage service.MetaStorage, log *zap.Logger, config *Config) *App {
-	lim := limiter.NewRegistry(5 * time.Minute)
 
-	limCfg := limiter.Config{
+	limCfg := &limiter.Config{
 		LoadConcurrent: 3,
 		ReadConcurrent: 3,
-		ClientIdleTTL:  5 * time.Minute,
-		//ClientIDFromMetadataKey: "",
+		TTL:            5 * time.Minute,
 	}
+
+	lim := limiter.NewRegistry(limCfg)
+
+	concurrencyInterceptor := interceptor.New(lim)
 
 	gRPCServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
-			limiter.NewConcurrencyInterceptor(lim).Unary(limCfg),
-			logger.UnaryLoggingInterceptor(log)),
-
+			concurrencyInterceptor.Unary(),
+			interceptor.UnaryLoggingInterceptor(log),
+		),
 		grpc.ChainStreamInterceptor(
-			limiter.NewConcurrencyInterceptor(lim).Stream(limCfg),
-			logger.StreamLoggingInterceptor(log)),
+			concurrencyInterceptor.Stream(),
+			interceptor.StreamLoggingInterceptor(log),
+		),
 	)
 
 	service.Register(gRPCServer, objectStorage, metaStorage, config.OperationTimeout, log)
